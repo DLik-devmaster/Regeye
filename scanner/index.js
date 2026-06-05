@@ -5,12 +5,9 @@ import { checkISOStandards } from './sources/iso.js';
 import { checkIECStandards } from './sources/iec.js';
 import { checkCustomStandards } from './sources/custom.js';
 import { fetchAllNews } from './sources/news.js';
+import { maxYear } from '../utils.js';
 
-// Extract the maximum 4-digit year from a version string like "2006+AMD1:2015"
-function maxYear(versionStr) {
-  const years = [...(versionStr || '').matchAll(/\d{4}/g)].map(m => parseInt(m[0]));
-  return years.length ? Math.max(...years).toString() : null;
-}
+export { maxYear };
 
 async function createAlert(regId, code, severity, type, title, body) {
   // Skip if an identical unacknowledged alert already exists
