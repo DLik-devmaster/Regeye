@@ -324,7 +324,7 @@ app.post('/api/regulations/:id/assess/documents',
       const newFile = req.files?.newDoc?.[0];
       if (!oldFile || !newFile) return res.status(400).json({ error: 'Both oldDoc and newDoc files required' });
 
-      const { PDFParse: pdfParse } = require('pdf-parse');
+      const pdfParse = require('pdf-parse');
       const [oldData, newData] = await Promise.all([
         pdfParse(oldFile.buffer),
         pdfParse(newFile.buffer),
