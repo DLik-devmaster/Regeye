@@ -14,6 +14,14 @@ import { calcGapScore } from './utils.js';
 const require = createRequire(import.meta.url);
 const PAID_BODIES = new Set(['ISO', 'ASTM']);
 
+// In-memory job store for async PDF assessment.
+// Jobs expire after 15 minutes to avoid unbounded memory growth.
+const jobs = new Map();
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [id, job] of jobs) if (job.startedAt < cutoff) jobs.delete(id);
+}, 60_000);
+
 // Preprocess document texts: strip preamble, TOC, watermarks, and running headers.
 // Returns both cleaned texts side-by-side for Claude to compare semantically.
 // Line-level diff is unreliable because PDFs reflow text at different column widths
@@ -350,43 +358,60 @@ app.post('/api/regulations/:id/assess/documents',
   upload.fields([{ name: 'oldDoc', maxCount: 1 }, { name: 'newDoc', maxCount: 1 }]),
   async (req, res) => {
     const { id } = req.params;
-    try {
-      const { rows } = await pool.query(`SELECT * FROM regulations WHERE id=$1`, [id]);
-      if (!rows.length) return res.status(404).json({ error: 'Regulation not found' });
-      const reg = rows[0];
+    const { rows } = await pool.query(`SELECT * FROM regulations WHERE id=$1`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Regulation not found' });
+    const reg = rows[0];
 
-      const oldFile = req.files?.oldDoc?.[0];
-      const newFile = req.files?.newDoc?.[0];
-      if (!oldFile || !newFile) return res.status(400).json({ error: 'Both oldDoc and newDoc files required' });
+    const oldFile = req.files?.oldDoc?.[0];
+    const newFile = req.files?.newDoc?.[0];
+    if (!oldFile || !newFile) return res.status(400).json({ error: 'Both oldDoc and newDoc files required' });
 
-      const pdfParse = require('pdf-parse');
-      const [oldData, newData] = await Promise.all([
-        pdfParse(oldFile.buffer),
-        pdfParse(newFile.buffer),
-      ]);
+    const jobId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    jobs.set(jobId, { status: 'processing', progress: 'Parsing PDFs…', startedAt: Date.now() });
+    res.json({ jobId });
 
-      const { oldClean, newClean } = buildDocumentContext(oldData.text, newData.text);
-      console.log(`[assess-docs] ${reg.code}: raw ${oldData.text.length}+${newData.text.length} chars → cleaned ${oldClean.length}+${newClean.length} chars (sonnet)`);
-      const { changes } = await generateGapAssessment(reg, {
-        documentContext: { oldText: oldData.text, newText: newData.text },
-      });
+    // Run assessment in background — client polls /api/jobs/:jobId
+    (async () => {
+      try {
+        jobs.get(jobId).progress = 'Extracting text…';
+        const pdfParse = require('pdf-parse');
+        const [oldData, newData] = await Promise.all([
+          pdfParse(oldFile.buffer),
+          pdfParse(newFile.buffer),
+        ]);
 
-      const isUpToDate = reg.version === reg.latest_version;
-      const gapScore = isUpToDate ? 0 : calcGapScore(changes);
+        jobs.get(jobId).progress = 'Cleaning document…';
+        const { oldClean, newClean } = buildDocumentContext(oldData.text, newData.text);
+        console.log(`[assess-docs] ${reg.code}: raw ${oldData.text.length}+${newData.text.length} → cleaned ${oldClean.length}+${newClean.length} chars`);
 
-      await pool.query(
-        `UPDATE regulations SET changes=$1, gap_score=$2 WHERE id=$3`,
-        [JSON.stringify(changes), gapScore, id]
-      );
+        jobs.get(jobId).progress = 'Asking Claude AI…';
+        const { changes } = await generateGapAssessment(reg, {
+          documentContext: { oldText: oldData.text, newText: newData.text },
+        });
 
-      console.log(`[assess-docs] ${reg.code}: ${changes.length} items, score ${gapScore}`);
-      res.json({ changes, gap_score: gapScore, disclaimer: false, mode: 'document' });
-    } catch (err) {
-      console.error('[assess-docs]', err.message);
-      res.status(500).json({ error: err.message });
-    }
+        const isUpToDate = reg.version === reg.latest_version;
+        const gapScore = isUpToDate ? 0 : calcGapScore(changes);
+
+        await pool.query(
+          `UPDATE regulations SET changes=$1, gap_score=$2 WHERE id=$3`,
+          [JSON.stringify(changes), gapScore, id]
+        );
+
+        console.log(`[assess-docs] ${reg.code}: ${changes.length} items, score ${gapScore}`);
+        jobs.set(jobId, { status: 'done', result: { changes, gap_score: gapScore, disclaimer: false, mode: 'document' }, startedAt: jobs.get(jobId)?.startedAt ?? Date.now() });
+      } catch (err) {
+        console.error('[assess-docs]', err.message);
+        jobs.set(jobId, { status: 'error', error: err.message, startedAt: jobs.get(jobId)?.startedAt ?? Date.now() });
+      }
+    })();
   }
 );
+
+app.get('/api/jobs/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found or expired' });
+  res.json(job);
+});
 
 // ── News ──────────────────────────────────────────────────────
 
