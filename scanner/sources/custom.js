@@ -47,7 +47,7 @@ function extractYearSimple(text) {
 async function fetchSourceUrl(url) {
   try {
     const res = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Clauseline/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Regeye/1.0)' },
       timeout: 12000,
       maxRedirects: 3,
     });

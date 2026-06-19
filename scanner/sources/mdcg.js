@@ -18,7 +18,7 @@ function parseDocCode(text) {
 export async function fetchMDCGVersions() {
   console.log('[mdcg] fetching guidance page...');
   const res = await axios.get(MDCG_URL, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Clauseline/1.0)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Regeye/1.0)' },
     timeout: 15000
   });
 
