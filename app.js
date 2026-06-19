@@ -64,14 +64,15 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(clerkMiddleware());
-
-const authRequired = requireAuth();
 
 const staticDir = join(__dir, 'regeye');
 if (existsSync(staticDir)) {
   app.use(express.static(staticDir));
 }
+
+app.use('/api', clerkMiddleware());
+
+const authRequired = requireAuth();
 
 // ── Regulations ───────────────────────────────────────────────
 
