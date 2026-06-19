@@ -74,9 +74,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
-app.use('/api', clerkMiddleware());
-
-const authRequired = requireAuth();
+const withAuth = [clerkMiddleware(), requireAuth()];
 
 // ── Regulations ───────────────────────────────────────────────
 
@@ -92,7 +90,7 @@ app.get('/api/regulations', async (req, res) => {
   }
 });
 
-app.post('/api/regulations', authRequired, async (req, res) => {
+app.post('/api/regulations', ...withAuth, async (req, res) => {
   const { id, code, version, latest_version, title, body, category, status, severity, gap_score, changes, source_url } = req.body;
   try {
     const { rows } = await pool.query(
@@ -115,7 +113,7 @@ app.post('/api/regulations', authRequired, async (req, res) => {
   }
 });
 
-app.patch('/api/regulations/:id/changes/:idx/status', authRequired, async (req, res) => {
+app.patch('/api/regulations/:id/changes/:idx/status', ...withAuth, async (req, res) => {
   const { status } = req.body;
   const { id } = req.params;
   const idx = parseInt(req.params.idx);
@@ -135,7 +133,7 @@ app.patch('/api/regulations/:id/changes/:idx/status', authRequired, async (req, 
   }
 });
 
-app.delete('/api/regulations/:id', authRequired, async (req, res) => {
+app.delete('/api/regulations/:id', ...withAuth, async (req, res) => {
   try {
     await pool.query(`DELETE FROM regulations WHERE id=$1`, [req.params.id]);
     res.json({ ok: true });
@@ -144,7 +142,7 @@ app.delete('/api/regulations/:id', authRequired, async (req, res) => {
   }
 });
 
-app.post('/api/regulations/:id/reset-assessment', authRequired, async (req, res) => {
+app.post('/api/regulations/:id/reset-assessment', ...withAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE regulations SET changes='[]', gap_score=0 WHERE id=$1 RETURNING id, code, gap_score`,
@@ -170,7 +168,7 @@ app.get('/api/alerts', async (req, res) => {
   }
 });
 
-app.patch('/api/alerts/:id/acknowledge', authRequired, async (req, res) => {
+app.patch('/api/alerts/:id/acknowledge', ...withAuth, async (req, res) => {
   try {
     await pool.query(`UPDATE alerts SET acknowledged=TRUE WHERE id=$1`, [req.params.id]);
     res.json({ ok: true });
@@ -179,7 +177,7 @@ app.patch('/api/alerts/:id/acknowledge', authRequired, async (req, res) => {
   }
 });
 
-app.delete('/api/alerts/:id', authRequired, async (req, res) => {
+app.delete('/api/alerts/:id', ...withAuth, async (req, res) => {
   try {
     await pool.query(`DELETE FROM alerts WHERE id=$1`, [req.params.id]);
     res.json({ ok: true });
@@ -190,7 +188,7 @@ app.delete('/api/alerts/:id', authRequired, async (req, res) => {
 
 // ── Dev ───────────────────────────────────────────────────────
 
-app.post('/api/dev/simulate-update', authRequired, async (req, res) => {
+app.post('/api/dev/simulate-update', ...withAuth, async (req, res) => {
   const { reg_id, latest_version, severity = 'minor' } = req.body;
   try {
     const { rows } = await pool.query(`SELECT * FROM regulations WHERE id=$1`, [reg_id]);
@@ -337,7 +335,7 @@ ${schema}`;
   return { changes, disclaimer };
 }
 
-app.post('/api/regulations/:id/assess', authRequired, async (req, res) => {
+app.post('/api/regulations/:id/assess', ...withAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(`SELECT * FROM regulations WHERE id=$1`, [id]);
@@ -363,7 +361,7 @@ app.post('/api/regulations/:id/assess', authRequired, async (req, res) => {
   }
 });
 
-app.post('/api/regulations/:id/assess/documents', authRequired,
+app.post('/api/regulations/:id/assess/documents', ...withAuth,
   upload.fields([{ name: 'oldDoc', maxCount: 1 }, { name: 'newDoc', maxCount: 1 }]),
   async (req, res) => {
     const { id } = req.params;
@@ -465,7 +463,7 @@ app.get('/api/news', async (req, res) => {
 
 // ── Scan ──────────────────────────────────────────────────────
 
-app.post('/api/scan', authRequired, async (req, res) => {
+app.post('/api/scan', ...withAuth, async (req, res) => {
   if (scanState.running) {
     return res.status(409).json({ error: 'Scan already in progress' });
   }
