@@ -65,7 +65,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const staticDir = join(__dir, 'regeye');
+const staticDir = join(__dir, 'regvue');
 if (existsSync(staticDir)) {
   app.use(express.static(staticDir));
 }
@@ -217,7 +217,7 @@ async function fetchChangelogContext(reg) {
   if (!reg.source_url) return null;
   try {
     const res = await fetch(reg.source_url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Regeye/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RegVue/1.0)' },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;

@@ -11,7 +11,7 @@ async function fetchNewsForReg(reg, days) {
   const url = `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
   const { data } = await axios.get(url, {
     timeout: 12000,
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RegeyeBot/1.0)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RegVueBot/1.0)' },
   });
   const parsed = await parseStringPromise(data, { explicitArray: true });
   const items = parsed?.rss?.channel?.[0]?.item || [];
